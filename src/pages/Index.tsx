@@ -2,12 +2,70 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 
+const StoreModal = ({ onClose }: { onClose: () => void }) => (
+  <div
+    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+    onClick={onClose}
+  >
+    <div
+      className="bg-[#2f3136] rounded-2xl p-6 w-full max-w-xs shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h3 className="text-white font-bold text-lg mb-1 text-center">Скачать Sera</h3>
+      <p className="text-[#b9bbbe] text-sm text-center mb-6">Выбери платформу</p>
+
+      <div className="flex flex-col gap-3">
+        <a
+          href="https://apps.apple.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-4 bg-[#36393f] hover:bg-[#40444b] transition-colors rounded-xl p-4 cursor-pointer"
+        >
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center flex-shrink-0">
+            <Icon name="Apple" className="w-6 h-6 text-black" fallback="Smartphone" />
+          </div>
+          <div>
+            <div className="text-[#b9bbbe] text-xs">Скачать в</div>
+            <div className="text-white font-semibold text-base">App Store</div>
+          </div>
+          <Icon name="ChevronRight" className="w-4 h-4 text-[#8e9297] ml-auto" />
+        </a>
+
+        <a
+          href="https://play.google.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-4 bg-[#36393f] hover:bg-[#40444b] transition-colors rounded-xl p-4 cursor-pointer"
+        >
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center flex-shrink-0">
+            <Icon name="Play" className="w-6 h-6 text-green-500" />
+          </div>
+          <div>
+            <div className="text-[#b9bbbe] text-xs">Доступно в</div>
+            <div className="text-white font-semibold text-base">Google Play</div>
+          </div>
+          <Icon name="ChevronRight" className="w-4 h-4 text-[#8e9297] ml-auto" />
+        </a>
+      </div>
+
+      <button
+        onClick={onClose}
+        className="mt-4 w-full text-[#8e9297] text-sm hover:text-white transition-colors py-2"
+      >
+        Закрыть
+      </button>
+    </div>
+  </div>
+);
+
 const Index = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [storeModalOpen, setStoreModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#36393f] text-white overflow-x-hidden">
+      {storeModalOpen && <StoreModal onClose={() => setStoreModalOpen(false)} />}
       {/* Навигация */}
       <nav className="bg-[#2f3136] border-b border-[#202225] px-4 sm:px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -25,7 +83,7 @@ const Index = () => {
               <Icon name="Smartphone" className="w-4 h-4 mr-2" />
               Приложение
             </Button>
-            <Button className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 py-2 rounded text-sm font-medium">
+            <Button onClick={() => setStoreModalOpen(true)} className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 py-2 rounded text-sm font-medium">
               Скачать
             </Button>
           </div>
@@ -46,7 +104,7 @@ const Index = () => {
                 <Icon name="Smartphone" className="w-4 h-4 mr-2" />
                 Приложение
               </Button>
-              <Button className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 py-2 rounded text-sm font-medium">
+              <Button onClick={() => setStoreModalOpen(true)} className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 py-2 rounded text-sm font-medium">
                 Скачать
               </Button>
             </div>
@@ -334,7 +392,7 @@ const Index = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Button className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 sm:px-8 py-2 sm:py-3 rounded text-sm font-medium">
+                  <Button onClick={() => setStoreModalOpen(true)} className="bg-[#0a84ff] hover:bg-[#0066cc] text-white px-6 sm:px-8 py-2 sm:py-3 rounded text-sm font-medium">
                     <Icon name="Download" className="w-4 h-4 mr-2" />
                     Скачать Sera
                   </Button>
