@@ -399,6 +399,7 @@ const Index = () => {
                   <Button
                     variant="outline"
                     className="border-[#4f545c] text-[#b9bbbe] hover:bg-[#40444b] hover:border-[#6d6f78] px-6 sm:px-8 py-2 sm:py-3 rounded text-sm font-medium bg-transparent"
+                    onClick={() => window.location.href = "/app"}
                   >
                     <Icon name="Globe" className="w-4 h-4 mr-2" />
                     Открыть в браузере
