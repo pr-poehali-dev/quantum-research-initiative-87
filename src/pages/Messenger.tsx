@@ -1,57 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-
-const contacts = [
-  { id: 1, name: "Мария", avatar: "М", color: "from-purple-500 to-pink-500", status: "online", lastMsg: "Давай созвонимся?", time: "12:05", unread: 2 },
-  { id: 2, name: "Иван", avatar: "И", color: "from-green-500 to-blue-500", status: "online", lastMsg: "Класс!", time: "12:08", unread: 0 },
-  { id: 3, name: "Семья", avatar: "С", color: "from-yellow-500 to-orange-500", status: "offline", lastMsg: "Приедете в воскресенье?", time: "Вчера", unread: 5 },
-  { id: 4, name: "Рабочий чат", avatar: "Р", color: "from-blue-500 to-cyan-500", status: "online", lastMsg: "Дедлайн завтра", time: "11:30", unread: 0 },
-  { id: 5, name: "Алексей", avatar: "А", color: "from-red-500 to-pink-500", status: "offline", lastMsg: "Ок, понял", time: "Пн", unread: 0 },
-];
-
-const initialMessages: Record<number, { id: number; text: string; from: "me" | "them"; time: string }[]> = {
-  1: [
-    { id: 1, text: "Привет!", from: "them", time: "12:00" },
-    { id: 2, text: "Привет! Как дела?", from: "me", time: "12:01" },
-    { id: 3, text: "Давай созвонимся обсудить проект?", from: "them", time: "12:05" },
-  ],
-  2: [
-    { id: 1, text: "Перешёл на Sera — всё летает!", from: "them", time: "12:08" },
-    { id: 2, text: "Да, согласен!", from: "me", time: "12:09" },
-  ],
-  3: [
-    { id: 1, text: "Привет всем!", from: "them", time: "Вчера" },
-    { id: 2, text: "Приедете в воскресенье?", from: "them", time: "Вчера" },
-  ],
-  4: [
-    { id: 1, text: "Дедлайн завтра", from: "them", time: "11:30" },
-  ],
-  5: [
-    { id: 1, text: "Ок, понял", from: "them", time: "Пн" },
-  ],
-};
+import Auth from "./Auth";
+import { getSavedUser, clearSession, getUsers, getChat, sendMessage, SeraUser, SeraMessage } from "@/lib/seraApi";
 
 const Messenger = () => {
-  const [activeContact, setActiveContact] = useState(contacts[0]);
-  const [messages, setMessages] = useState(initialMessages);
+  const [user, setUser] = useState<SeraUser | null>(getSavedUser());
+  const [contacts, setContacts] = useState<SeraUser[]>([]);
+  const [activeContact, setActiveContact] = useState<SeraUser | null>(null);
+  const [messages, setMessages] = useState<SeraMessage[]>([]);
+  const [myId, setMyId] = useState<number | null>(null);
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    const now = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-    setMessages((prev) => ({
-      ...prev,
-      [activeContact.id]: [
-        ...(prev[activeContact.id] || []),
-        { id: Date.now(), text: input.trim(), from: "me", time: now },
-      ],
-    }));
+  useEffect(() => {
+    if (!user) return;
+    getUsers().then(setContacts).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!activeContact) return;
+    setLoadingChat(true);
+    getChat(activeContact.id).then((data) => {
+      setMessages(data.messages);
+      setMyId(data.my_id);
+      setLoadingChat(false);
+    }).catch(() => setLoadingChat(false));
+  }, [activeContact]);
+
+  useEffect(() => {
+    if (!activeContact) return;
+    const interval = setInterval(() => {
+      getChat(activeContact.id).then((data) => {
+        setMessages(data.messages);
+        setMyId(data.my_id);
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeContact]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || !activeContact) return;
+    const text = input.trim();
     setInput("");
+    try {
+      await sendMessage(activeContact.id, text);
+      const data = await getChat(activeContact.id);
+      setMessages(data.messages);
+      setMyId(data.my_id);
+    } catch (_e) {
+      console.error(_e);
+    }
   };
 
-  const currentMessages = messages[activeContact.id] || [];
+  const handleLogout = () => {
+    clearSession();
+    setUser(null);
+  };
+
+  if (!user) {
+    return <Auth onAuth={() => setUser(getSavedUser())} />;
+  }
 
   return (
     <div className="h-screen bg-[#36393f] text-white flex flex-col overflow-hidden">
@@ -64,118 +79,141 @@ const Messenger = () => {
           <span className="font-bold text-white">Sera</span>
         </a>
         <div className="w-px h-5 bg-[#40444b]"></div>
-        <span className="text-[#b9bbbe] text-sm">Мессенджер</span>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#0a84ff] rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-medium">А</span>
+        <span className="text-[#b9bbbe] text-sm hidden sm:block">Мессенджер</span>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#0a84ff] rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">{user.first_name[0]}</span>
+            </div>
+            <span className="text-white text-sm font-medium hidden sm:block">{user.first_name} {user.last_name}</span>
           </div>
+          <Button variant="ghost" onClick={handleLogout} className="text-[#b9bbbe] hover:text-white hover:bg-[#40444b] p-2">
+            <Icon name="LogOut" className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Список контактов */}
         <div className={`${sidebarOpen ? "flex" : "hidden"} md:flex w-full md:w-72 bg-[#2f3136] flex-col flex-shrink-0 absolute md:relative inset-0 z-10 md:z-auto`}>
-          {/* Поиск */}
           <div className="p-3 border-b border-[#202225]">
             <div className="bg-[#202225] rounded-lg px-3 py-2 flex items-center gap-2">
               <Icon name="Search" className="w-4 h-4 text-[#72767d]" />
-              <span className="text-[#72767d] text-sm">Поиск</span>
+              <span className="text-[#72767d] text-sm">Поиск пользователей</span>
             </div>
           </div>
-
-          {/* Контакты */}
           <div className="flex-1 overflow-y-auto p-2">
-            {contacts.map((contact) => (
-              <div
-                key={contact.id}
-                onClick={() => { setActiveContact(contact); setSidebarOpen(false); }}
-                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${activeContact.id === contact.id ? "bg-[#393c43]" : "hover:bg-[#393c43]"}`}
-              >
-                <div className="relative flex-shrink-0">
-                  <div className={`w-10 h-10 bg-gradient-to-br ${contact.color} rounded-full flex items-center justify-center`}>
-                    <span className="text-white font-medium text-sm">{contact.avatar}</span>
-                  </div>
-                  {contact.status === "online" && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#3ba55c] border-2 border-[#2f3136] rounded-full"></div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-white font-medium text-sm truncate">{contact.name}</span>
-                    <span className="text-[#72767d] text-xs ml-2 flex-shrink-0">{contact.time}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-[#b9bbbe] text-xs truncate">{contact.lastMsg}</span>
-                    {contact.unread > 0 && (
-                      <div className="ml-2 w-5 h-5 bg-[#0a84ff] rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-xs font-bold">{contact.unread}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {contacts.length === 0 ? (
+              <div className="text-center text-[#72767d] text-sm mt-8 px-4">
+                <Icon name="Users" className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>Пока нет других пользователей</p>
+                <p className="text-xs mt-1">Попроси друга зарегистрироваться в Sera</p>
               </div>
-            ))}
+            ) : (
+              contacts.map((contact) => (
+                <div
+                  key={contact.id}
+                  onClick={() => { setActiveContact(contact); setSidebarOpen(false); }}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${activeContact?.id === contact.id ? "bg-[#393c43]" : "hover:bg-[#393c43]"}`}
+                >
+                  <div className="w-10 h-10 bg-[#0a84ff] rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-medium text-sm">{contact.first_name[0]}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-medium text-sm truncate">{contact.first_name} {contact.last_name}</div>
+                    <div className="text-[#72767d] text-xs truncate">{contact.email}</div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         {/* Область чата */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Заголовок чата */}
-          <div className="bg-[#36393f] border-b border-[#202225] px-4 py-3 flex items-center gap-3 flex-shrink-0">
-            <Button
-              variant="ghost"
-              className="md:hidden text-[#b9bbbe] hover:text-white hover:bg-[#40444b] p-1"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Icon name="Menu" className="w-5 h-5" />
-            </Button>
-            <div className={`w-9 h-9 bg-gradient-to-br ${activeContact.color} rounded-full flex items-center justify-center flex-shrink-0`}>
-              <span className="text-white font-medium text-sm">{activeContact.avatar}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white font-semibold text-sm">{activeContact.name}</div>
-              <div className="text-xs text-[#3ba55c]">{activeContact.status === "online" ? "в сети" : "не в сети"}</div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Icon name="Phone" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white" />
-              <Icon name="Video" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white" />
-              <Icon name="MoreVertical" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white" />
-            </div>
-          </div>
-
-          {/* Сообщения */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {currentMessages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm ${msg.from === "me" ? "bg-[#0a84ff] text-white rounded-br-sm" : "bg-[#2f3136] text-[#dcddde] rounded-bl-sm"}`}>
-                  <p>{msg.text}</p>
-                  <p className={`text-xs mt-1 ${msg.from === "me" ? "text-blue-200" : "text-[#72767d]"} text-right`}>{msg.time}</p>
-                </div>
+          {!activeContact ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+              <div className="w-20 h-20 bg-[#2f3136] rounded-full flex items-center justify-center mb-4">
+                <Icon name="MessageCircle" className="w-10 h-10 text-[#0a84ff]" />
               </div>
-            ))}
-          </div>
-
-          {/* Поле ввода */}
-          <div className="p-4 border-t border-[#202225] flex-shrink-0">
-            <div className="flex items-center gap-3 bg-[#40444b] rounded-xl px-4 py-2">
-              <Icon name="Paperclip" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white flex-shrink-0" />
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder={`Сообщение ${activeContact.name}...`}
-                className="flex-1 bg-transparent text-white text-sm outline-none placeholder-[#72767d]"
-              />
+              <h3 className="text-white text-xl font-bold mb-2">Выбери собеседника</h3>
+              <p className="text-[#72767d] text-sm max-w-xs">Выбери пользователя слева, чтобы начать переписку</p>
               <Button
-                onClick={sendMessage}
-                disabled={!input.trim()}
-                className="w-8 h-8 p-0 bg-[#0a84ff] hover:bg-[#0066cc] disabled:opacity-30 rounded-lg flex-shrink-0"
+                className="md:hidden mt-4 bg-[#0a84ff] hover:bg-[#0066cc] text-white"
+                onClick={() => setSidebarOpen(true)}
               >
-                <Icon name="Send" className="w-4 h-4 text-white" />
+                <Icon name="Users" className="w-4 h-4 mr-2" />
+                Открыть контакты
               </Button>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="bg-[#36393f] border-b border-[#202225] px-4 py-3 flex items-center gap-3 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  className="md:hidden text-[#b9bbbe] hover:text-white hover:bg-[#40444b] p-1"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <Icon name="Menu" className="w-5 h-5" />
+                </Button>
+                <div className="w-9 h-9 bg-[#0a84ff] rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-medium text-sm">{activeContact.first_name[0]}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-semibold text-sm">{activeContact.first_name} {activeContact.last_name}</div>
+                  <div className="text-xs text-[#3ba55c]">в сети</div>
+                </div>
+                <Icon name="Phone" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white" />
+                <Icon name="Video" className="w-5 h-5 text-[#b9bbbe] cursor-pointer hover:text-white ml-2" />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {loadingChat ? (
+                  <div className="flex justify-center items-center h-full">
+                    <Icon name="Loader" className="w-6 h-6 text-[#0a84ff] animate-spin" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="w-14 h-14 bg-[#2f3136] rounded-full flex items-center justify-center mb-3">
+                      <span className="text-2xl">{activeContact.first_name[0]}</span>
+                    </div>
+                    <p className="text-white font-semibold">{activeContact.first_name} {activeContact.last_name}</p>
+                    <p className="text-[#72767d] text-sm mt-1">Начни переписку первым!</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.sender_id === myId ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl text-sm ${msg.sender_id === myId ? "bg-[#0a84ff] text-white rounded-br-sm" : "bg-[#2f3136] text-[#dcddde] rounded-bl-sm"}`}>
+                        <p>{msg.text}</p>
+                        <p className={`text-xs mt-1 ${msg.sender_id === myId ? "text-blue-200" : "text-[#72767d]"} text-right`}>{msg.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              <div className="p-4 border-t border-[#202225] flex-shrink-0">
+                <div className="flex items-center gap-3 bg-[#40444b] rounded-xl px-4 py-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    placeholder={`Сообщение для ${activeContact.first_name}...`}
+                    className="flex-1 bg-transparent text-white text-sm outline-none placeholder-[#72767d]"
+                  />
+                  <Button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="w-8 h-8 p-0 bg-[#0a84ff] hover:bg-[#0066cc] disabled:opacity-30 rounded-lg flex-shrink-0"
+                  >
+                    <Icon name="Send" className="w-4 h-4 text-white" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

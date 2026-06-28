@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Register user",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {"first_name": "Тест", "last_name": "Юзер", "email": "test_sera_new1@example.com", "password": "123456"},
+      "expectedStatus": 200,
+      "expectedBody": {"token": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Login user",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {"email": "test_sera_new1@example.com", "password": "123456"},
+      "expectedStatus": 200,
+      "expectedBody": {"token": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
